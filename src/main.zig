@@ -90,39 +90,6 @@ fn get_cli_args(allocator: Allocator) !Config {
     return config;
 }
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const config = get_cli_args(allocator) catch |err| {
-        if (err != ArgsError.SHOW_HELP) {
-            std.log.err("error occured while reading cli args = {any}", .{err});
-        }
-
-        try show_help();
-        return;
-    };
-
-    const in_file = get_input_reader(config.inputFile) catch |err| {
-        std.log.err("error occured while preparing input stream = {any}", .{err});
-        return;
-    };
-    defer in_file.close();
-
-    const out_file = get_output_writer(config.outputFile) catch |err| {
-        std.log.err("error occured while preparing output stream = {any}", .{err});
-        return;
-    };
-    defer out_file.close();
-
-    if (config.reverse) {
-        reverse_hex_dump(in_file, out_file);
-    } else {
-        hex_dump(in_file, out_file, config, allocator);
-    }
-}
-
 fn hex_dump(in: File, out: File, config: Config, allocator: Allocator) void {
     var hex_buf: [10:0]u8 = undefined; // 10 cause largest hex string => `{x:0>8}: `
     var should_read_next: bool = true;
@@ -212,6 +179,12 @@ fn hex_dump(in: File, out: File, config: Config, allocator: Allocator) void {
         };
     }
 }
+fn tryReadNextChar(file: File) ?u8 {
+    return file_next_char(file) catch |err| {
+        std.log.err("error occurred while trying to read character: {any}", .{err});
+        return null;
+    };
+}
 
 fn reverse_hex_dump(in: File, out: File) void {
     var hex_str: [2:0]u8 = undefined;
@@ -219,8 +192,8 @@ fn reverse_hex_dump(in: File, out: File) void {
     var reading_hex = false;
     var line_done = false;
 
-    while (file_next_char(in) catch null) |c| {
-        var char = c;
+    while (true) {
+        var char = tryReadNextChar(in) orelse break;
 
         if (char == ':' and !line_done) {
             _ = file_next_char(in) catch |err| {
@@ -300,6 +273,44 @@ fn get_max_hex_line_size(col_size: usize) usize {
     return 10 + 2 * col_size + col_size / 2 - last_space;
 }
 
+fn show_help() !void {
+    const out = std.io.getStdOut();
+    defer out.close();
+    _ = try out.write(help_promot);
+}
+pub fn main() !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const config = get_cli_args(allocator) catch |err| {
+        if (err != ArgsError.SHOW_HELP) {
+            std.log.err("error occured while reading cli args = {any}", .{err});
+        }
+
+        try show_help();
+        return;
+    };
+
+    const in_file = get_input_reader(config.inputFile) catch |err| {
+        std.log.err("error occured while preparing input stream = {any}", .{err});
+        return;
+    };
+    defer in_file.close();
+
+    const out_file = get_output_writer(config.outputFile) catch |err| {
+        std.log.err("error occured while preparing output stream = {any}", .{err});
+        return;
+    };
+    defer out_file.close();
+
+    if (config.reverse) {
+        reverse_hex_dump(in_file, out_file);
+    } else {
+        hex_dump(in_file, out_file, config, allocator);
+    }
+}
+
 const help_promot =
     \\Usage:
     \\      xxd [options]
@@ -311,9 +322,3 @@ const help_promot =
     \\      -p                      pretty print: colored hex. not compatible with -r
     \\      -h                      show this prompt
 ;
-
-fn show_help() !void {
-    const out = std.io.getStdOut();
-    defer out.close();
-    _ = try out.write(help_promot);
-}
