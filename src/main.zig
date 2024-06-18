@@ -18,14 +18,7 @@ const ArgsError = error{
     NO_INPUT_FILE_SPECIFIED,
     NO_OUTPUT_FILE_SPECIFIED,
 };
-const Flags = enum {
-    InputFileFlag,
-    OutputFileFlag,
-    ColumnSizeFlag,
-    ReverseFlag,
-    PrettyPrintFlag,
-    ShowHelp,
-};
+
 const CliFlags = enum {
     InputFileFlag,
     OutputFileFlag,
@@ -44,10 +37,6 @@ const CliFlags = enum {
             .ShowHelp => "-h",
         };
     }
-
-    fn stringToOption(s: []const u8) Flags {
-        if (std.mem.eql(u8, s, "-i")) return CliFlags.InputFileFlag;
-    }
 };
 // Playing around with enums
 const Colors = enum {
@@ -55,11 +44,6 @@ const Colors = enum {
     const YellowColor: [:0]const u8 = "\x1b[33m";
     const ResetColor: [:0]const u8 = "\x1b[0m";
 };
-
-fn handleInputFile(argsIter: *std.mem.SplitIterator(u8), config: *Config) !void {
-    config.input_file = argsIter.next();
-    if (config.input_file == null) return ArgsError.NO_INPUT_FILE_SPECIFIED;
-}
 
 fn get_cli_args(allocator: Allocator) !Config {
     var argsIter = try std.process.ArgIterator.initWithAllocator(allocator);
@@ -70,15 +54,11 @@ fn get_cli_args(allocator: Allocator) !Config {
     var config: Config = .{};
 
     while (argsIter.next()) |arg| {
-        const opt = CliFlags.stringToOption(arg);
-        switch (opt) {
-            .InputFileFlag => handleInputFile(&argsIter, &config),
+        if (std.mem.eql(u8, CliFlags.InputFileFlag.value(), arg)) {
+            config.inputFile = argsIter.next();
+            if (config.inputFile == null) return ArgsError.NO_INPUT_FILE_SPECIFIED;
+            continue;
         }
-        // if (std.mem.eql(u8, CliFlags.InputFileFlag.value(), arg)) {
-        //     config.inputFile = argsIter.next();
-        //     if (config.inputFile == null) return ArgsError.NO_INPUT_FILE_SPECIFIED;
-        //     continue;
-        // }
 
         if (std.mem.eql(u8, CliFlags.OutputFileFlag.value(), arg)) {
             config.outputFile = argsIter.next();
@@ -263,7 +243,7 @@ fn reverse_hex_dump(in: File, out: File) void {
                 return;
             }) orelse continue;
             reading_hex = char != '\n';
-            line_done = !(char == '\n'); // reset line done for next line
+            line_done = !(char == '\n');
         }
 
         if (char == ' ' and reading_hex) {
@@ -315,7 +295,7 @@ fn file_next_char(file: File) !?u8 {
 }
 
 fn get_max_hex_line_size(col_size: usize) usize {
-    // 8 + 1 (:) + 1 (' ') + 2 * 16(max chars per column) + 16/2 (no. of space after each hex pair) - 1 (remove ending ' ')
+    // 8 + 1 (:) + 1 (' ') + 2 * 16(max chars per column) + 16/2 (no. of space after each hex pair) - 1 (last space)
     const last_space: usize = if (col_size % 2 == 0) 1 else 0;
     return 10 + 2 * col_size + col_size / 2 - last_space;
 }
