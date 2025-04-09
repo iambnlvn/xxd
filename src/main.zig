@@ -276,7 +276,7 @@ fn get_max_hex_line_size(col_size: usize) usize {
 fn show_help() !void {
     const out = std.io.getStdOut();
     defer out.close();
-    _ = try out.write(help_promot);
+    _ = try out.write(help_prompt);
 }
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -311,7 +311,7 @@ pub fn main() !void {
     }
 }
 
-const help_promot =
+const help_prompt =
     \\Usage:
     \\      xxd [options]
     \\Options:
